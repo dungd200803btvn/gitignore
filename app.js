@@ -6,6 +6,10 @@ const app = express();
 const port = 3000;
 const mongoose = require("mongoose");
 const encrypt = require("mongoose-encryption");
+const md5 = require("md5");
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
+
 app.use(express.static("public"));
 app.set('view engine','ejs');
 app.use(bodyParser.urlencoded({
@@ -32,8 +36,7 @@ const userSchema = new mongoose.Schema({
     email: String,
     password: String
 });
-const secret = "Thisisourlittlesecret";
-userSchema.plugin(encrypt, { secret: process.env.SECRET,encryptedFields: ["password"] });
+
 
 
 
@@ -55,17 +58,19 @@ app.get("/login",function(req,res){
         );        
 // post 
 app.post("/register", async (req, res) => {
-    try {
-      const newUser = new User({
-        email: req.body.username,
-        password: req.body.password,
-      });
-      await newUser.save();
-      res.render("secrets");
-    } catch (err) {
-      console.error(err);
-      res.status(500).send("Đã xảy ra lỗi trong quá trình đăng ký");
-    }
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+        try {
+            const newUser = new User({
+              email: req.body.username,
+              password: hash
+            });
+             newUser.save();
+            res.render("secrets");
+          } catch (err) {
+            console.error(err);
+            res.status(500).send("Đã xảy ra lỗi trong quá trình đăng ký");
+          }
+    });
   });
   app.post("/login", async (req, res) => {
     const username = req.body.username;
@@ -74,8 +79,13 @@ app.post("/register", async (req, res) => {
     try {
       const foundUser = await User.findOne({ email: username });
   
-      if (foundUser && foundUser.password === password) {
-        res.render("secrets");
+      if (foundUser) {
+        bcrypt.compare(password, foundUser.password, function(err, result) {
+            if(result===true){
+                res.render("secrets");
+            }
+        });
+       
       } else {
         res.send("Tên người dùng hoặc mật khẩu không đúng");
       }
