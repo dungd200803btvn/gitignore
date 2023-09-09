@@ -50,29 +50,23 @@ connect();
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId: String
+    googleId: String,
+    secret:String
 });
 userSchema.plugin(passportLocalMoongoose);
 userSchema.plugin(findOrCreate);
-
-
-
-
-
-
 const User = new mongoose.model("User",userSchema);
 passport.use(User.createStrategy());
-const user1 = User.serializeUser();
-const user2 = User.deserializeUser();
-//passport.serializeUser(User.serializeUser());
-//passport.deserializeUser(User.deserializeUser());
-
-passport.serializeUser(function(user1, done) {
-  done(null, user1);
+passport.serializeUser(function(user, done) {
+  done(null, user.id);
 });
-
-passport.deserializeUser(function(user2, done) {
-  done(null, user2);
+passport.deserializeUser(async function (id, done) {
+  try {
+    const user = await User.findById(id);
+    done(null, user);
+  } catch (err) {
+    done(err, null);
+  }
 });
 
 //Google Strategy
@@ -115,13 +109,21 @@ app.get("/login",function(req,res){
         );  
         
 // secrets route
-app.get("/secrets",function(req,res){
-    if(req.isAuthenticated()){
-        res.render("secrets");
-    }else{
-        res.redirect("/login");
-    }
-});        
+app.get("/secrets", async function (req, res) {
+  try {
+    const foundUsers = await User.find({ "secret": { $ne: null } });
+    res.render("secrets", { usersWithSecrets: foundUsers });
+  } catch (err) {
+    console.error(err);
+  }
+});   
+app.get("/submit",function(req,res){
+  if(req.isAuthenticated()){
+    res.render("submit");
+}else{
+    res.redirect("/login");
+}
+});  
 app.get("/logout", function(req, res) {
     req.logout(function(err) {
       if (err) {
@@ -160,6 +162,23 @@ app.post("/register", async (req, res) => {
         }
     })
   }); 
+  app.post("/submit", async function (req, res) {
+    const submitSecret = req.body.secret;
+    console.log(req.user.id);
+  
+    try {
+      const foundUser = await User.findById(req.user.id);
+      if (foundUser) {
+        foundUser.secret = submitSecret;
+        await foundUser.save();
+        res.redirect("secrets");
+      } else {
+        throw new Error("User not found");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  });
 
         
   app.listen(port, () => {
